@@ -92,7 +92,11 @@ public partial class App : Application
             _floatingBarWindow = new FloatingBarWindow();
             _floatingBarWindow.DataContext = _appViewModel.FloatingBar;
 
-            // Show/hide floating bar based on phase changes
+            // Show the window once (it starts invisible via Opacity=0).
+            // All subsequent show/hide uses Opacity to avoid WPF transparent-window flicker.
+            _floatingBarWindow.Show();
+
+            // React to phase changes via Opacity-based ShowBar/HideBar
             _appViewModel.FloatingBar.PropertyChanged += (_, args) =>
             {
                 if (args.PropertyName == nameof(FloatingBarViewModel.Phase))
@@ -100,9 +104,9 @@ public partial class App : Application
                     Dispatcher.Invoke(() =>
                     {
                         if (_appViewModel.FloatingBar.Phase == Models.FloatingBarPhase.Hidden)
-                            _floatingBarWindow.Hide();
-                        else if (!_floatingBarWindow.IsVisible)
-                            _floatingBarWindow.Show();
+                            _floatingBarWindow.HideBar();
+                        else
+                            _floatingBarWindow.ShowBar();
                     });
                 }
             };

@@ -26,6 +26,8 @@ public sealed class AzureASRClient : ISpeechRecognizer
 
     private RecognitionTranscript _lastTranscript = new();
     private string _language = "zh-CN";
+    private string _requestId = ""; // Single request ID for the entire turn
+    private readonly List<string> _confirmedSegments = []; // Accumulate final phrases across turn
 
     public ChannelReader<RecognitionEvent> Events => _eventChannel.Reader;
 
@@ -36,8 +38,11 @@ public sealed class AzureASRClient : ISpeechRecognizer
         var config = AzureASRConfig.TryCreate(credentials)
             ?? throw new InvalidOperationException("AzureASRClient requires valid AzureASRConfig");
 
-        // Determine language (from credentials or default)
-        _language = credentials.GetValueOrDefault("language", "zh-CN");
+        // Parse languages (comma-separated, e.g. "zh-CN,en-US")
+        var languageRaw = credentials.GetValueOrDefault("language", "zh-CN,en-US");
+        var languages = languageRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (languages.Length == 0) languages = ["zh-CN"];
+        _language = languages[0]; // Primary language
 
         // Build WebSocket URL
         var connectionId = Guid.NewGuid().ToString("N");
@@ -48,13 +53,20 @@ public sealed class AzureASRClient : ISpeechRecognizer
         var url = $"{endpoint}/speech/recognition/conversation/cognitiveservices/v1" +
                   $"?language={_language}&format=detailed";
 
+        // Enable auto language detection if multiple languages configured
+        if (languages.Length > 1)
+            url += "&lidEnabled=true";
+
         _webSocket = new ClientWebSocket();
         _webSocket.Options.SetRequestHeader("Ocp-Apim-Subscription-Key", config.SubscriptionKey);
         _webSocket.Options.SetRequestHeader("X-ConnectionId", connectionId);
 
-        DebugFileLogger.Log($"[AzureASR] Connecting to {config.Region}, language={_language}, connectionId={connectionId}");
+        DebugFileLogger.Log($"[AzureASR] Connecting to {config.Region}, languages={languageRaw}, connectionId={connectionId}");
 
         await _webSocket.ConnectAsync(new Uri(url), ct);
+
+        // Generate a single request ID for the entire turn
+        _requestId = Guid.NewGuid().ToString("N");
 
         // Send speech.config message
         var speechConfig = BuildSpeechConfig();
@@ -62,9 +74,10 @@ public sealed class AzureASRClient : ISpeechRecognizer
 
         // Send RIFF/WAV header for audio format (16kHz/16-bit/mono PCM)
         var riffHeader = BuildRiffHeader();
-        await SendBinaryWithHeader("audio", riffHeader, ct);
+        await SendAudioBinary(riffHeader, ct);
 
         _lastTranscript = new RecognitionTranscript();
+        _confirmedSegments.Clear();
 
         // Start receive loop
         _receiveCts = new CancellationTokenSource();
@@ -79,7 +92,7 @@ public sealed class AzureASRClient : ISpeechRecognizer
     {
         if (_webSocket is not { State: WebSocketState.Open }) return;
 
-        await SendBinaryWithHeader("audio", data, ct);
+        await SendAudioBinary(data, ct);
     }
 
     // ── End Audio ──────────────────────────────────────────
@@ -89,7 +102,7 @@ public sealed class AzureASRClient : ISpeechRecognizer
         if (_webSocket is not { State: WebSocketState.Open }) return;
 
         // Send empty audio message to signal end of stream
-        await SendBinaryWithHeader("audio", [], ct);
+        await SendAudioBinary([], ct);
         DebugFileLogger.Log("[AzureASR] Sent end-of-audio signal");
     }
 
@@ -142,19 +155,35 @@ public sealed class AzureASRClient : ISpeechRecognizer
                 while (!result.EndOfMessage);
 
                 if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    DebugFileLogger.Log($"[AzureASR] Server closed: {result.CloseStatus} - {result.CloseStatusDescription}");
                     break;
+                }
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
                     var text = Encoding.UTF8.GetString(ms.ToArray());
                     HandleTextMessage(text);
                 }
+                // Binary responses from Azure STT are ignored (audio synthesis, not relevant)
             }
+
+            if (_webSocket != null && _webSocket.State != WebSocketState.Open)
+                DebugFileLogger.Log($"[AzureASR] WebSocket state: {_webSocket.State}");
         }
         catch (OperationCanceledException) { /* normal shutdown */ }
+        catch (WebSocketException ex)
+        {
+            DebugFileLogger.Log($"[AzureASR] WebSocket error: {ex.WebSocketErrorCode} - {ex.Message}");
+            if (!ct.IsCancellationRequested)
+            {
+                EmitEvent(new RecognitionEvent.Error(ex));
+                EmitEvent(new RecognitionEvent.Completed());
+            }
+        }
         catch (Exception ex)
         {
-            DebugFileLogger.Log($"[AzureASR] Receive loop error: {ex.Message}");
+            DebugFileLogger.Log($"[AzureASR] Receive loop error: {ex.GetType().Name} - {ex.Message}");
             if (!ct.IsCancellationRequested)
             {
                 EmitEvent(new RecognitionEvent.Error(ex));
@@ -229,7 +258,7 @@ public sealed class AzureASRClient : ISpeechRecognizer
 
             var transcript = new RecognitionTranscript
             {
-                ConfirmedSegments = [],
+                ConfirmedSegments = [.. _confirmedSegments],
                 PartialText = text,
                 IsFinal = false,
             };
@@ -280,11 +309,15 @@ public sealed class AzureASRClient : ISpeechRecognizer
 
             if (string.IsNullOrEmpty(displayText)) return;
 
+            // Accumulate this phrase into confirmed segments
+            _confirmedSegments.Add(displayText);
+
+            var allText = string.Join("", _confirmedSegments);
             var transcript = new RecognitionTranscript
             {
-                ConfirmedSegments = [displayText],
+                ConfirmedSegments = [.. _confirmedSegments],
                 PartialText = "",
-                AuthoritativeText = displayText,
+                AuthoritativeText = allText,
                 IsFinal = true,
             };
 
@@ -306,35 +339,34 @@ public sealed class AzureASRClient : ISpeechRecognizer
     /// </summary>
     private async Task SendTextMessage(string path, string body, CancellationToken ct)
     {
-        var requestId = Guid.NewGuid().ToString("N");
         var timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-        var message = $"Path: {path}\r\nX-RequestId: {requestId}\r\nX-Timestamp: {timestamp}\r\nContent-Type: application/json\r\n\r\n{body}";
+        var message = $"Path: {path}\r\nX-RequestId: {_requestId}\r\nX-Timestamp: {timestamp}\r\nContent-Type: application/json\r\n\r\n{body}";
 
         var bytes = Encoding.UTF8.GetBytes(message);
         await _webSocket!.SendAsync(bytes, WebSocketMessageType.Text, true, ct);
     }
 
     /// <summary>
-    /// Send a binary message with a 2-byte header length prefix + path header + body.
-    /// Azure Speech binary messages: [2-byte header length][header string][binary payload]
+    /// Send a binary audio message with 2-byte header length prefix.
+    /// Uses the stable _requestId for the entire turn.
+    /// Azure Speech binary messages: [2-byte header length][header string][audio payload]
     /// </summary>
-    private async Task SendBinaryWithHeader(string path, byte[] body, CancellationToken ct)
+    private async Task SendAudioBinary(byte[] audioData, CancellationToken ct)
     {
         if (_webSocket is not { State: WebSocketState.Open }) return;
 
-        var requestId = Guid.NewGuid().ToString("N");
         var timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-        var header = $"Path: {path}\r\nX-RequestId: {requestId}\r\nX-Timestamp: {timestamp}\r\nContent-Type: audio/x-wav";
+        var header = $"Path: audio\r\nX-RequestId: {_requestId}\r\nX-Timestamp: {timestamp}\r\nContent-Type: audio/x-wav";
 
         var headerBytes = Encoding.UTF8.GetBytes(header);
         var headerLen = (ushort)headerBytes.Length;
 
         // Message format: [2-byte big-endian header length][header][audio data]
-        var message = new byte[2 + headerBytes.Length + body.Length];
+        var message = new byte[2 + headerBytes.Length + audioData.Length];
         message[0] = (byte)(headerLen >> 8);
         message[1] = (byte)(headerLen & 0xFF);
         Buffer.BlockCopy(headerBytes, 0, message, 2, headerBytes.Length);
-        Buffer.BlockCopy(body, 0, message, 2 + headerBytes.Length, body.Length);
+        Buffer.BlockCopy(audioData, 0, message, 2 + headerBytes.Length, audioData.Length);
 
         await _webSocket.SendAsync(message, WebSocketMessageType.Binary, true, ct);
     }

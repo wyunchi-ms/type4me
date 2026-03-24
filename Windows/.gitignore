@@ -1,0 +1,66 @@
+## Build output
+bin/
+obj/
+out/
+
+## NuGet
+*.nupkg
+**/packages/
+project.lock.json
+project.fragment.lock.json
+
+## Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+## MSBuild
+*.tlb
+*.tlh
+*.tli
+*.tmp_proj
+*_wpftmp.csproj
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## Publish / deploy
+publish/
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+*.msixupload
+
+## User-specific / local settings
+*.env
+appsettings.*.json
+launchSettings.json
+
+## Test results
+TestResults/
+*.trx
+coverage*/
+
+## OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store

@@ -148,14 +148,17 @@ public sealed class RecognitionSession : IDisposable
             ContextHistoryLength = ASRCustomizationStorage.GetContextHistoryLength(),
         };
 
+        OnDebugLog?.Invoke("ASR", $"→ Connecting [{provider.DisplayName()}]", null);
         try
         {
             await client.ConnectAsync(credentials, options);
             DebugFileLogger.Log($"[Session] ASR connected OK (hotwords={hotwords.Length})");
+            OnDebugLog?.Invoke("ASR", $"✓ Connected", null);
         }
         catch (Exception ex)
         {
             DebugFileLogger.Log($"[Session] ASR connect FAILED: {ex.Message}");
+            OnDebugLog?.Invoke("ERROR", $"ASR connect failed: {ex.Message}", ex.ToString());
             SoundFeedback.PlayError();
             await client.DisconnectAsync();
             _asrClient = null;
@@ -193,6 +196,7 @@ public sealed class RecognitionSession : IDisposable
             if (chunkCount == 1)
             {
                 DebugFileLogger.Log($"[Session] First audio chunk: {data.Length} bytes");
+                OnDebugLog?.Invoke("AUDIO", $"▶ Streaming ({data.Length}B/chunk)", null);
                 MarkReadyIfNeeded();
             }
             _ = Task.Run(async () =>
@@ -344,6 +348,9 @@ public sealed class RecognitionSession : IDisposable
             var finalText = SnippetStorage.Apply(effectiveText);
             string? processedText = null;
 
+            // Log ASR result
+            OnDebugLog?.Invoke("ASR", $"← Result ({rawText.Length} chars)", rawText);
+
             // LLM post-processing
             if (needsLLM)
             {
@@ -418,6 +425,10 @@ public sealed class RecognitionSession : IDisposable
         {
             case RecognitionEvent.Transcript t:
                 _currentTranscript = t.Value;
+                if (t.Value.IsFinal)
+                    OnDebugLog?.Invoke("ASR", $"← Final: {t.Value.DisplayText}", null);
+                else if (!string.IsNullOrEmpty(t.Value.PartialText))
+                    OnDebugLog?.Invoke("ASR", $"… {t.Value.PartialText}", null);
                 if (_state == SessionState.Recording && !string.IsNullOrEmpty(_currentMode.Prompt))
                     ScheduleSpeculativeLLM();
                 break;

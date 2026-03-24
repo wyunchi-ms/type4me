@@ -16,8 +16,8 @@ public sealed class AzureASRConfig
     [
         new() { Key = "subscriptionKey", Label = "Subscription Key", Placeholder = Loc.L("密钥", "Secret"), IsSecure = true },
         new() { Key = "region", Label = "Region", Placeholder = "eastasia" },
-        new() { Key = "language", Label = Loc.L("语言", "Language"), Placeholder = "zh-CN",
-                IsOptional = true, DefaultValue = "zh-CN" },
+        new() { Key = "language", Label = Loc.L("语言", "Languages"), Placeholder = "zh-CN,en-US",
+                IsOptional = true, DefaultValue = "zh-CN,en-US" },
         new() { Key = "customEndpoint", Label = "Custom Endpoint", Placeholder = Loc.L("可选", "Optional"), IsOptional = true },
     ];
 
@@ -31,7 +31,7 @@ public sealed class AzureASRConfig
         if (!credentials.TryGetValue("subscriptionKey", out var key) || string.IsNullOrEmpty(key)) return null;
         if (!credentials.TryGetValue("region", out var region) || string.IsNullOrEmpty(region)) return null;
         var language = credentials.GetValueOrDefault("language");
-        if (string.IsNullOrEmpty(language)) language = "zh-CN";
+        if (string.IsNullOrEmpty(language)) language = "zh-CN,en-US";
         return new AzureASRConfig(key, region, language, credentials.GetValueOrDefault("customEndpoint"));
     }
 

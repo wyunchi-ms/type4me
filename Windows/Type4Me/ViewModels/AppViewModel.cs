@@ -56,6 +56,7 @@ public partial class AppViewModel : ObservableObject
         HotkeyManager.OnStartRecording += mode =>
         {
             CurrentMode = mode;
+            DebugLog.Add("HOTKEY", $"▶ {mode.Name}");
             _ = Task.Run(async () =>
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
@@ -70,6 +71,7 @@ public partial class AppViewModel : ObservableObject
 
         HotkeyManager.OnStopRecording += mode =>
         {
+            DebugLog.Add("HOTKEY", $"■ {mode.Name}");
             _ = Task.Run(async () =>
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
@@ -161,6 +163,14 @@ public partial class AppViewModel : ObservableObject
     {
         switch (evt)
         {
+            case RecognitionEvent.Ready:
+                DebugLog.Add("SESSION", Localization.Loc.L("录音开始", "Recording started"));
+                break;
+
+            case RecognitionEvent.Finalized f:
+                DebugLog.Add("INJECT", f.Injection.CompletionMessage(), f.Text);
+                break;
+
             case RecognitionEvent.Error e:
                 DebugLog.Add("ERROR", e.Exception.Message, e.Exception.GetType().Name);
                 break;

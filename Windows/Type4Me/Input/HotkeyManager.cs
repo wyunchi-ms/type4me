@@ -32,6 +32,7 @@ public sealed class HotkeyManager : IDisposable
     private bool _isRecording;
     private bool _isSuppressed;
     private DateTime _holdStartTime;
+    private readonly HashSet<int> _heldKeys = [];
 
     private const int MaxHoldSeconds = 120;
 
@@ -95,8 +96,18 @@ public sealed class HotkeyManager : IDisposable
             bool isDown = msg == Win32.WM_KEYDOWN || msg == Win32.WM_SYSKEYDOWN;
             bool isUp = msg == Win32.WM_KEYUP || msg == Win32.WM_SYSKEYUP;
 
-            if (isDown || isUp)
-                HandleKey(vk, isDown);
+            if (isDown)
+            {
+                // Ignore key-repeats: only act on the first keydown
+                if (!_heldKeys.Add(vk))
+                    return Win32.CallNextHookEx(_hookId, nCode, wParam, lParam);
+                HandleKey(vk, isDown: true);
+            }
+            else if (isUp)
+            {
+                _heldKeys.Remove(vk);
+                HandleKey(vk, isDown: false);
+            }
         }
 
         return Win32.CallNextHookEx(_hookId, nCode, wParam, lParam);
@@ -126,17 +137,26 @@ public sealed class HotkeyManager : IDisposable
                     {
                         // Same mode: toggle off (for toggle style)
                         if (mode.HotkeyStyle == HotkeyStyle.Toggle)
+                        {
+                            _isRecording = false;
+                            _activeMode = null;
                             OnStopRecording?.Invoke(mode);
+                        }
+                        // Hold style: ignore key repeats while recording
                     }
                     else
                     {
                         // Different mode: cross-mode stop
+                        _isRecording = false;
+                        _activeMode = null;
                         OnCrossModeStop?.Invoke(mode);
                     }
                 }
                 else
                 {
-                    // Start recording
+                    // Start recording — mark immediately to prevent key-repeat re-trigger
+                    _isRecording = true;
+                    _activeMode = mode;
                     _holdStartTime = DateTime.Now;
                     OnStartRecording?.Invoke(mode);
                 }
@@ -146,6 +166,8 @@ public sealed class HotkeyManager : IDisposable
                 if (_isRecording && _activeMode?.Id == mode.Id && mode.HotkeyStyle == HotkeyStyle.Hold)
                 {
                     // Hold mode: release = stop
+                    _isRecording = false;
+                    _activeMode = null;
                     OnStopRecording?.Invoke(mode);
                 }
             }
