@@ -1,0 +1,13 @@
+<Window x:Class="Type4Me.Views.Setup.SetupWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Type4Me.Views.Setup"
+        Title="Type4Me" Width="640" Height="480"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#F2EBE0">
+
+    <Grid x:Name="ContentGrid">
+        <!-- Steps are swapped programmatically -->
+    </Grid>
+</Window>

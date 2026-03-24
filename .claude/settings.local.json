@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs wc:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet build:*)",
+      "Bash(ls does:*)",
+      "Bash(dotnet test:*)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+<UserControl x:Class="Type4Me.Views.Setup.CustomModeDemoStep"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <TextBlock x:Name="TitleText" FontSize="20" FontWeight="Bold"
+                   Foreground="#1A1A1A" HorizontalAlignment="Center"
+                   Margin="0,0,0,8"/>
+        <TextBlock x:Name="DescText" FontSize="12" Foreground="#6B6B6B"
+                   HorizontalAlignment="Center" TextWrapping="Wrap"
+                   TextAlignment="Center" MaxWidth="440" Margin="0,0,0,24"/>
+
+        <!-- Demo area -->
+        <Grid Width="480" Height="220">
+            <!-- Raw text card -->
+            <Border x:Name="RawCard" Background="#FAF5ED" CornerRadius="10"
+                    Padding="16" VerticalAlignment="Top"
+                    HorizontalAlignment="Left" Width="460">
+                <StackPanel>
+                    <TextBlock x:Name="RawLabel" FontSize="11" Foreground="#6B6B6B"
+                               Margin="0,0,0,4"/>
+                    <TextBlock x:Name="RawText" FontSize="12" Foreground="#1A1A1A"
+                               TextWrapping="Wrap" MinHeight="20"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Processed text card -->
+            <Border x:Name="ProcessedCard" Background="#F0EDE5" CornerRadius="10"
+                    Padding="16" VerticalAlignment="Bottom"
+                    HorizontalAlignment="Left" Width="460" Opacity="0">
+                <StackPanel>
+                    <TextBlock x:Name="ProcessedLabel" FontSize="11" Foreground="#4D9E59"
+                               FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="ProcessedText" FontSize="12" Foreground="#1A1A1A"
+                               TextWrapping="Wrap" MinHeight="20"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </StackPanel>
+</UserControl>
