@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
@@ -23,6 +22,9 @@ public partial class App : Application
     private FloatingBarWindow? _floatingBarWindow;
     private Views.Settings.SettingsWindow? _settingsWindow;
     private Views.Debug.DebugLogWindow? _debugWindow;
+
+    /// <summary>Global accessor for the root AppViewModel (null until startup completes).</summary>
+    public static AppViewModel? ViewModel => (Current as App)?._appViewModel;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -72,6 +74,7 @@ public partial class App : Application
             ToolTipText = "Type4Me",
             ContextMenu = CreateTrayMenu(),
         };
+        _trayIcon.TrayMouseDoubleClick += (_, _) => ShowSettings();
 
         // Try to load icon from resources
         try

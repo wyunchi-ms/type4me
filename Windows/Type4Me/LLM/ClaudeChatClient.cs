@@ -12,7 +12,7 @@ namespace Type4Me.LLM;
 /// </summary>
 public sealed class ClaudeChatClient : ILLMClient
 {
-    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient _http = Services.HttpLogger.CreateClient("Claude", TimeSpan.FromSeconds(30));
 
     public async Task WarmUpAsync(string baseURL)
     {

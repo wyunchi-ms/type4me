@@ -15,7 +15,7 @@ public static class VolcFlashASRClient
     private static readonly Uri Endpoint =
         new("https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash");
 
-    private static readonly HttpClient _httpClient = new();
+    private static readonly HttpClient _httpClient = Services.HttpLogger.CreateClient("Volcano-Flash");
 
     public static async Task<string> RecognizeAsync(byte[] pcmData, VolcanoASRConfig config, CancellationToken ct = default)
     {
@@ -37,15 +37,14 @@ public static class VolcFlashASRClient
         };
 
         var resourceId = Environment.GetEnvironmentVariable("VOLC_FLASH_RESOURCE_ID")
-            ?? "volc.bigasr.auc_turbo";
+            ?? VolcanoASRConfig.FlashResourceId;
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
         request.Content = new StringContent(
             JsonSerializer.Serialize(body),
             System.Text.Encoding.UTF8,
             "application/json");
-        request.Headers.Add("X-Api-App-Key", config.AppKey);
-        request.Headers.Add("X-Api-Access-Key", config.AccessKey);
+        request.Headers.Add("X-Api-Key", config.ApiKey);
         request.Headers.Add("X-Api-Resource-Id", resourceId);
         request.Headers.Add("X-Api-Request-Id", Guid.NewGuid().ToString());
         request.Headers.Add("X-Api-Sequence", "-1");

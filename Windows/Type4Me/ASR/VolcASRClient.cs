@@ -38,12 +38,37 @@ public sealed class VolcASRClient : ISpeechRecognizer
         var connectId = Guid.NewGuid().ToString();
 
         _webSocket = new ClientWebSocket();
-        _webSocket.Options.SetRequestHeader("X-Api-App-Key", config.AppKey);
-        _webSocket.Options.SetRequestHeader("X-Api-Access-Key", config.AccessKey);
+        _webSocket.Options.SetRequestHeader("X-Api-Key", config.ApiKey);
         _webSocket.Options.SetRequestHeader("X-Api-Resource-Id", config.ResourceId);
+        _webSocket.Options.SetRequestHeader("X-Api-Request-Id", connectId);
         _webSocket.Options.SetRequestHeader("X-Api-Connect-Id", connectId);
 
-        await _webSocket.ConnectAsync(Endpoint, ct);
+        var handshakeRequest =
+            $"GET {Endpoint} (WebSocket upgrade)\n" +
+            $"X-Api-Key: {HttpLogger.Redact(config.ApiKey)}\n" +
+            $"X-Api-Resource-Id: {config.ResourceId}\n" +
+            $"X-Api-Request-Id: {connectId}\n" +
+            $"X-Api-Connect-Id: {connectId}";
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            await _webSocket.ConnectAsync(Endpoint, ct);
+            sw.Stop();
+            HttpLogger.LogManual("Volcano-WS",
+                handshakeRequest,
+                $"101 Switching Protocols ({sw.ElapsedMilliseconds}ms), connectId={connectId}",
+                isError: false);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            HttpLogger.LogManual("Volcano-WS",
+                handshakeRequest,
+                $"<handshake failed after {sw.ElapsedMilliseconds}ms> {ex.GetType().Name}: {ex.Message}",
+                isError: true);
+            throw;
+        }
 
         // Send full_client_request
         var payload = VolcProtocol.BuildClientRequest(uid: config.Uid, options: options);

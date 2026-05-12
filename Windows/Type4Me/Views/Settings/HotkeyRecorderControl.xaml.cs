@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -29,6 +28,11 @@ public partial class HotkeyRecorderControl : UserControl
     public HotkeyRecorderControl()
     {
         InitializeComponent();
+        Unloaded += (_, _) =>
+        {
+            if (_isRecording)
+                StopRecording();
+        };
         UpdateDisplay();
     }
 
@@ -58,6 +62,11 @@ public partial class HotkeyRecorderControl : UserControl
 
     private void Border_Click(object sender, MouseButtonEventArgs e)
     {
+        if (ClearBtn.IsVisible && IsDescendantOf(e.OriginalSource as DependencyObject, ClearBtn))
+            return;
+
+        e.Handled = true;
+
         if (_isRecording)
         {
             StopRecording();
@@ -69,56 +78,113 @@ public partial class HotkeyRecorderControl : UserControl
 
     private void StartRecording()
     {
+        if (_isRecording) return;
+
         _isRecording = true;
         DisplayText.Text = Loc.L("请按下快捷键...", "Press a key...");
         DisplayText.Foreground = new SolidColorBrush(Color.FromRgb(199, 140, 38));
         RecorderBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(199, 140, 38));
+        RecorderBorder.Background = new SolidColorBrush(Color.FromRgb(255, 248, 230));
         ClearBtn.Visibility = Visibility.Collapsed;
 
-        Focus();
+        // Suppress the global low-level keyboard hook so recording-key presses
+        // don't trigger a recording session in the background.
+        var hk = App.ViewModel?.HotkeyManager;
+        if (hk != null) hk.IsSuppressed = true;
+
+        // Steal keyboard focus to this control so PreviewKeyDown fires here.
+        Focusable = true;
+        _ = Dispatcher.BeginInvoke(() => Keyboard.Focus(this), System.Windows.Threading.DispatcherPriority.Input);
+
+        // Listen at the window level too, in case focus lands elsewhere
+        // (e.g., a focused TextBox would otherwise eat the keystrokes).
+        var window = Window.GetWindow(this);
+        if (window != null)
+        {
+            window.PreviewKeyDown -= OnPreviewKeyDown;
+            window.PreviewKeyDown += OnPreviewKeyDown;
+            window.Deactivated -= OwnerWindow_Deactivated;
+            window.Deactivated += OwnerWindow_Deactivated;
+            _ownerWindow = window;
+        }
+        PreviewKeyDown -= OnPreviewKeyDown;
         PreviewKeyDown += OnPreviewKeyDown;
     }
+
+    private Window? _ownerWindow;
 
     private void StopRecording()
     {
         _isRecording = false;
         PreviewKeyDown -= OnPreviewKeyDown;
+        if (_ownerWindow != null)
+        {
+            _ownerWindow.PreviewKeyDown -= OnPreviewKeyDown;
+            _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
+            _ownerWindow = null;
+        }
+
+        var hk = App.ViewModel?.HotkeyManager;
+        if (hk != null) hk.IsSuppressed = false;
+
         RecorderBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(232, 227, 217));
+        RecorderBorder.Background = new SolidColorBrush(Color.FromRgb(253, 250, 246));
         UpdateDisplay();
+    }
+
+    private void OwnerWindow_Deactivated(object? sender, EventArgs e)
+    {
+        if (_isRecording)
+            StopRecording();
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (!_isRecording) return;
+
         e.Handled = true;
 
-        // Get the actual VK code
-        int vk = KeyInterop.VirtualKeyFromKey(e.Key == Key.System ? e.SystemKey : e.Key);
-
-        // Skip pure modifier keys — wait for a non-modifier
-        if (IsModifierKey(vk))
-            return;
-
-        // Capture modifiers
-        uint mods = 0;
-        if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl))
-            mods |= Win32.MOD_CONTROL;
-        if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift))
-            mods |= Win32.MOD_SHIFT;
-        if (Keyboard.IsKeyDown(Key.LeftAlt) || Keyboard.IsKeyDown(Key.RightAlt))
-            mods |= Win32.MOD_ALT;
-        if (Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin))
-            mods |= Win32.MOD_WIN;
-
-        // Distinguish left/right for Ctrl, Shift, Alt
-        if (e.Key == Key.LeftCtrl || e.Key == Key.RightCtrl ||
-            e.Key == Key.LeftShift || e.Key == Key.RightShift ||
-            e.Key == Key.LeftAlt || e.Key == Key.RightAlt ||
-            e.SystemKey == Key.LeftAlt || e.SystemKey == Key.RightAlt)
+        // Resolve the actual key (System key when Alt is involved)
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key == Key.Escape)
         {
-            // User pressed just a modifier key as the hotkey itself (e.g., Right Ctrl alone)
-            vk = KeyInterop.VirtualKeyFromKey(e.Key == Key.System ? e.SystemKey : e.Key);
-            mods = 0; // The modifier IS the key, not a modifier
+            StopRecording();
+            return;
         }
+
+        int vk = KeyInterop.VirtualKeyFromKey(key);
+        if (vk == 0) return;
+
+        // Detect which modifier keys are currently held (left/right specific)
+        bool ctrlHeld = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);
+        bool shiftHeld = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
+        bool altHeld = Keyboard.IsKeyDown(Key.LeftAlt) || Keyboard.IsKeyDown(Key.RightAlt);
+        bool winHeld = Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin);
+
+        bool keyIsModifier = IsModifierKey(vk);
+
+        // Case A: a modifier key is the trigger itself (no other modifier held).
+        // Capture it directly so users can bind Right Ctrl / Right Alt / Right Shift / etc.
+        if (keyIsModifier)
+        {
+            int heldModifierCount = (ctrlHeld ? 1 : 0) + (shiftHeld ? 1 : 0) + (altHeld ? 1 : 0) + (winHeld ? 1 : 0);
+            // The pressed modifier itself counts as one held modifier; require no OTHER modifier held.
+            if (heldModifierCount > 1)
+                return; // wait for a non-modifier key when combining modifiers
+
+            KeyCode = vk;
+            Modifiers = null;
+            StopRecording();
+            HotkeyChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        // Case B: a non-modifier key (optionally combined with modifiers).
+        uint mods = 0;
+        if (ctrlHeld) mods |= Win32.MOD_CONTROL;
+        if (shiftHeld) mods |= Win32.MOD_SHIFT;
+        if (altHeld) mods |= Win32.MOD_ALT;
+        if (winHeld) mods |= Win32.MOD_WIN;
 
         KeyCode = vk;
         Modifiers = mods > 0 ? mods : null;
@@ -136,16 +202,31 @@ public partial class HotkeyRecorderControl : UserControl
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
+        if (_isRecording)
+            StopRecording();
+
         KeyCode = null;
         Modifiers = null;
         UpdateDisplay();
         HotkeyChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private static bool IsDescendantOf(DependencyObject? current, DependencyObject ancestor)
+    {
+        while (current != null)
+        {
+            if (ReferenceEquals(current, ancestor))
+                return true;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return false;
+    }
+
     protected override void OnLostFocus(RoutedEventArgs e)
     {
         base.OnLostFocus(e);
-        if (_isRecording)
-            StopRecording();
     }
+
 }

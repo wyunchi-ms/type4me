@@ -4,8 +4,10 @@ namespace Type4Me.ASR.Providers;
 
 public sealed class VolcanoASRConfig
 {
-    public string AppKey { get; }
-    public string AccessKey { get; }
+    public const string DefaultResourceId = "volc.bigasr.sauc.duration";
+    public const string FlashResourceId = "volc.bigasr.auc_turbo";
+
+    public string ApiKey { get; }
     public string ResourceId { get; }
     public string Uid { get; }
 
@@ -14,40 +16,41 @@ public sealed class VolcanoASRConfig
 
     public static CredentialField[] CredentialFields =>
     [
-        new() { Key = "appKey", Label = "App Key", Placeholder = "APPID", IsSecure = false, IsOptional = false },
-        new() { Key = "accessKey", Label = "Access Token", Placeholder = Loc.L("访问令牌", "Access token"), IsSecure = true, IsOptional = false },
+        new() { Key = "apiKey", Label = "API Key", Placeholder = Loc.L("新版控制台 API Key", "API Key from new console"), IsSecure = true, IsOptional = false },
+        new() { Key = "resourceId", Label = Loc.L("资源 ID", "Resource ID"), Placeholder = DefaultResourceId, IsSecure = false, IsOptional = true },
     ];
 
-    private VolcanoASRConfig(string appKey, string accessKey, string resourceId, string uid)
+    private VolcanoASRConfig(string apiKey, string resourceId, string uid)
     {
-        AppKey = appKey;
-        AccessKey = accessKey;
+        ApiKey = apiKey;
         ResourceId = resourceId;
         Uid = uid;
     }
 
     public static VolcanoASRConfig? TryCreate(Dictionary<string, string> credentials)
     {
-        if (!credentials.TryGetValue("appKey", out var appKey) || string.IsNullOrEmpty(appKey))
-            return null;
-        if (!credentials.TryGetValue("accessKey", out var accessKey) || string.IsNullOrEmpty(accessKey))
+        // New-console single API key. Accept legacy "accessKey" as a fallback for migration.
+        if (!credentials.TryGetValue("apiKey", out var apiKey) || string.IsNullOrWhiteSpace(apiKey))
+        {
+            credentials.TryGetValue("accessKey", out apiKey);
+        }
+        if (string.IsNullOrWhiteSpace(apiKey))
             return null;
 
         var resourceId = credentials.GetValueOrDefault("resourceId");
-        if (string.IsNullOrEmpty(resourceId))
-            resourceId = "volc.bigasr.sauc.duration";
+        if (string.IsNullOrWhiteSpace(resourceId))
+            resourceId = DefaultResourceId;
 
         var uid = Services.ASRCustomizationStorage.LoadOrCreateUID();
 
-        return new VolcanoASRConfig(appKey, accessKey, resourceId, uid);
+        return new VolcanoASRConfig(apiKey.Trim(), resourceId.Trim(), uid);
     }
 
     public Dictionary<string, string> ToCredentials() => new()
     {
-        ["appKey"] = AppKey,
-        ["accessKey"] = AccessKey,
+        ["apiKey"] = ApiKey,
         ["resourceId"] = ResourceId,
     };
 
-    public bool IsValid => !string.IsNullOrEmpty(AppKey) && !string.IsNullOrEmpty(AccessKey);
+    public bool IsValid => !string.IsNullOrEmpty(ApiKey);
 }

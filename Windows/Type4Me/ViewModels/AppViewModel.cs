@@ -43,6 +43,12 @@ public partial class AppViewModel : ObservableObject
             DebugLog.Add(category, message, detail);
         };
 
+        // Wire HTTP capture → debug console
+        HttpLogger.OnHttpEvent += (tag, req, resp, isError) =>
+        {
+            DebugLog.Add(isError ? "HTTP-ERR" : "HTTP", tag, $"REQUEST\n{req}\n\nRESPONSE\n{resp}");
+        };
+
         Session.OnAudioLevel = level =>
         {
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>

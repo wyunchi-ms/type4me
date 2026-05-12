@@ -6,7 +6,7 @@
     <Border x:Name="RecorderBorder" Background="#FDFAF6" CornerRadius="6"
             Padding="12,8" Cursor="Hand" MinWidth="200" HorizontalAlignment="Left"
             BorderBrush="#E8E3D9" BorderThickness="1"
-            MouseLeftButtonDown="Border_Click">
+            PreviewMouseLeftButtonDown="Border_Click">
         <DockPanel>
             <Button DockPanel.Dock="Right" Content="×" FontSize="12"
                     Background="Transparent" BorderThickness="0"

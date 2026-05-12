@@ -14,7 +14,7 @@ namespace Type4Me.LLM;
 /// </summary>
 public sealed class OpenAIChatClient : ILLMClient
 {
-    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient _http = Services.HttpLogger.CreateClient("OpenAI", TimeSpan.FromSeconds(30));
 
     public async Task WarmUpAsync(string baseURL)
     {

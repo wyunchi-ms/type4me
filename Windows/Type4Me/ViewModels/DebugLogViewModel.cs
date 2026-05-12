@@ -61,6 +61,8 @@ public class DebugLogEntry
         "LLM" => "#FF9800",
         "INJECT" => "#9C27B0",
         "ERROR" => "#F44336",
+        "HTTP-ERR" => "#F44336",
+        "HTTP" => "#00ACC1",
         "SESSION" => "#607D8B",
         "AUDIO" => "#00BCD4",
         _ => "#6B6B6B",

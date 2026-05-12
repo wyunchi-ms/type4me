@@ -19,6 +19,7 @@ public partial class FloatingBarViewModel : ObservableObject
     public void StartRecording()
     {
         Segments = [];
+        TranscriptionText = string.Empty;
         AudioLevel = 0;
         RecordingStartDate = null;
         FeedbackMessage = Localization.Loc.L("已完成", "Done");
