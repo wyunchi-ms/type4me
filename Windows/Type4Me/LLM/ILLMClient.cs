@@ -8,7 +8,7 @@ namespace Type4Me.LLM;
 public interface ILLMClient
 {
     /// <summary>Process text through LLM with the given prompt template.</summary>
-    Task<string> ProcessAsync(string text, string prompt, LLMConfig config, CancellationToken ct = default);
+    Task<string> ProcessAsync(string text, string prompt, LLMConfig config, LLMRequestContext? context = null, CancellationToken ct = default);
 
     /// <summary>Pre-establish TCP+TLS connection for faster first request.</summary>
     Task WarmUpAsync(string baseURL);

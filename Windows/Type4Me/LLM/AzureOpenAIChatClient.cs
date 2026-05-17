@@ -28,12 +28,12 @@ public sealed class AzureOpenAIChatClient : ILLMClient
         catch { /* ignore */ }
     }
 
-    public async Task<string> ProcessAsync(string text, string prompt, LLMConfig config, CancellationToken ct = default)
+    public async Task<string> ProcessAsync(string text, string prompt, LLMConfig config, LLMRequestContext? context = null, CancellationToken ct = default)
     {
         var trimmedText = text.Trim();
         if (string.IsNullOrEmpty(trimmedText)) return text;
 
-        var finalPrompt = prompt.Replace("{text}", trimmedText);
+        var finalPrompt = PromptContextBuilder.Build(prompt, trimmedText, context);
 
         // Reconstruct the Azure URL from LLMConfig fields:
         // config.BaseURL = endpoint, config.Model = deploymentName
@@ -47,9 +47,17 @@ public sealed class AzureOpenAIChatClient : ILLMClient
         request.Headers.Add("Accept", "text/event-stream");
 
         // gpt-5.2-chat: no temperature, no thinking parameter
+        object messageContent = context?.HasScreenshot == true
+            ? new object[]
+            {
+                new { type = "text", text = finalPrompt },
+                new { type = "image_url", image_url = new { url = context.ScreenshotDataUrl } },
+            }
+            : finalPrompt;
+
         var body = new
         {
-            messages = new[] { new { role = "user", content = finalPrompt } },
+            messages = new[] { new { role = "user", content = messageContent } },
             stream = true,
         };
 

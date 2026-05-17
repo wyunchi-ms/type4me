@@ -44,8 +44,8 @@ public partial class ModesSettingsTab : UserControl
         StyleHold.Content = Loc.L("按住说话", "Hold to talk");
         PromptLabel.Text = Loc.L("提示词", "Prompt");
         PromptDesc.Text = Loc.L(
-            "留空 = 直接输入模式。使用 {text} 占位符表示 ASR 识别结果。",
-            "Empty = direct input mode. Use {text} as placeholder for ASR output.");
+            "留空 = 直接输入模式。可用占位符：{text}、{current application name}、{current application screenshot}。",
+            "Empty = direct input mode. Placeholders: {text}, {current application name}, {current application screenshot}.");
 
         // Bind list
         ModeListBox.ItemsSource = _vm.Modes;

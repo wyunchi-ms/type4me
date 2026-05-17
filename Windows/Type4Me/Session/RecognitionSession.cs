@@ -38,6 +38,7 @@ public sealed class RecognitionSession : IDisposable
     private ProcessingMode _currentMode = ProcessingMode.Direct;
     private DateTime? _recordingStartTime;
     private Dictionary<string, string>? _currentCredentials;
+    private LLMRequestContext? _currentRequestContext;
 
     // ── Callbacks ──────────────────────────────────────────
 
@@ -104,6 +105,7 @@ public sealed class RecognitionSession : IDisposable
         }
 
         _currentMode = mode;
+        _currentRequestContext = CurrentApplicationContextService.Capture();
         _recordingStartTime = null;
         _hasEmittedReady = false;
         _state = SessionState.Starting;
@@ -358,12 +360,12 @@ public sealed class RecognitionSession : IDisposable
                 var llmConfig = LoadCurrentLLMConfig();
                 if (llmConfig != null)
                 {
-                    var requestBody = _currentMode.Prompt.Replace("{text}", finalText);
+                    var requestBody = PromptContextBuilder.Build(_currentMode.Prompt, finalText, _currentRequestContext);
                     OnDebugLog?.Invoke("LLM", $"→ Request  [{llmConfig.Model}]", requestBody);
                     try
                     {
                         var llmClient = CreateCurrentLLMClient();
-                        var result = await llmClient.ProcessAsync(finalText, _currentMode.Prompt, llmConfig);
+                        var result = await llmClient.ProcessAsync(finalText, _currentMode.Prompt, llmConfig, _currentRequestContext);
                         OnDebugLog?.Invoke("LLM", $"← Response ({result.Length} chars)", result);
                         processedText = result;
                         finalText = result;
@@ -411,6 +413,7 @@ public sealed class RecognitionSession : IDisposable
             _state = SessionState.Idle;
             _hasEmittedReady = false;
             _currentTranscript = new RecognitionTranscript();
+            _currentRequestContext = null;
         }
         ResetSpeculativeLLM();
     }
@@ -484,7 +487,7 @@ public sealed class RecognitionSession : IDisposable
         {
             try
             {
-                return await client.ProcessAsync(text, prompt, llmConfig);
+                return await client.ProcessAsync(text, prompt, llmConfig, _currentRequestContext);
             }
             catch { return null; }
         });
@@ -525,6 +528,7 @@ public sealed class RecognitionSession : IDisposable
         _currentTranscript = new RecognitionTranscript();
         _hasEmittedReady = false;
         _currentCredentials = null;
+        _currentRequestContext = null;
     }
 
     // ── Helpers ─────────────────────────────────────────────

@@ -25,12 +25,12 @@ public sealed class ClaudeChatClient : ILLMClient
         catch { /* ignore */ }
     }
 
-    public async Task<string> ProcessAsync(string text, string prompt, LLMConfig config, CancellationToken ct = default)
+    public async Task<string> ProcessAsync(string text, string prompt, LLMConfig config, LLMRequestContext? context = null, CancellationToken ct = default)
     {
         var trimmedText = text.Trim();
         if (string.IsNullOrEmpty(trimmedText)) return text;
 
-        var finalPrompt = prompt.Replace("{text}", trimmedText);
+        var finalPrompt = PromptContextBuilder.Build(prompt, trimmedText, context);
         var url = $"{config.BaseURL.TrimEnd('/')}/messages";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -38,11 +38,19 @@ public sealed class ClaudeChatClient : ILLMClient
         request.Headers.Add("anthropic-version", "2023-06-01");
         request.Headers.Add("Accept", "text/event-stream");
 
+        object messageContent = context?.HasScreenshot == true
+            ? new object[]
+            {
+                new { type = "text", text = finalPrompt },
+                new { type = "image", source = new { type = "base64", media_type = context.CurrentApplicationScreenshotMediaType, data = context.CurrentApplicationScreenshotBase64 } },
+            }
+            : finalPrompt;
+
         var body = new
         {
             model = config.Model,
             max_tokens = 4096,
-            messages = new[] { new { role = "user", content = finalPrompt } },
+            messages = new[] { new { role = "user", content = messageContent } },
             stream = true,
         };
 

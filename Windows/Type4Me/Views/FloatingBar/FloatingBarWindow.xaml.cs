@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Threading;
 using System.Windows.Interop;
 using Type4Me.NativeMethods;
 using Type4Me.Theme;
@@ -14,6 +15,7 @@ namespace Type4Me.Views.FloatingBar;
 public partial class FloatingBarWindow : Window
 {
     private bool _isBarVisible;
+    private bool _isRepositionQueued;
 
     public FloatingBarWindow()
     {
@@ -21,6 +23,7 @@ public partial class FloatingBarWindow : Window
         Opacity = 0;
         IsHitTestVisible = false;
         Loaded += OnLoaded;
+        SizeChanged += OnSizeChanged;
         DataContextChanged += OnDataContextChanged;
     }
 
@@ -42,7 +45,11 @@ public partial class FloatingBarWindow : Window
             or nameof(FloatingBarViewModel.FeedbackMessage)
             or nameof(FloatingBarViewModel.ProcessingLabel))
         {
-            Dispatcher.Invoke(() => BarView.UpdatePhase(vm.Phase, vm));
+            Dispatcher.Invoke(() =>
+            {
+                BarView.UpdatePhase(vm.Phase, vm);
+                QueueReposition();
+            });
         }
     }
 
@@ -61,8 +68,28 @@ public partial class FloatingBarWindow : Window
     public void PositionAtBottomCenter()
     {
         var screen = SystemParameters.WorkArea;
-        Left = (screen.Width - Width) / 2 + screen.Left;
-        Top = screen.Bottom - Height - DesignTokens.BarBottomOffset;
+        var width = ActualWidth > 0 ? ActualWidth : Width;
+        var height = ActualHeight > 0 ? ActualHeight : Height;
+
+        Left = screen.Left + (screen.Width - width) / 2;
+        Top = Math.Max(screen.Top, screen.Bottom - height - DesignTokens.BarBottomOffset);
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        QueueReposition();
+    }
+
+    private void QueueReposition()
+    {
+        if (_isRepositionQueued) return;
+        _isRepositionQueued = true;
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            _isRepositionQueued = false;
+            PositionAtBottomCenter();
+        }, DispatcherPriority.Loaded);
     }
 
     /// <summary>Make the bar visible (no-op if already visible).</summary>

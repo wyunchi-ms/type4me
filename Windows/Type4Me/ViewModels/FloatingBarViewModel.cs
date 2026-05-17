@@ -22,7 +22,7 @@ public partial class FloatingBarViewModel : ObservableObject
         TranscriptionText = string.Empty;
         AudioLevel = 0;
         RecordingStartDate = null;
-        FeedbackMessage = Localization.Loc.L("已完成", "Done");
+        FeedbackMessage = Localization.Loc.L("优化完", "Optimized");
         Phase = FloatingBarPhase.Preparing;
     }
 
@@ -102,7 +102,7 @@ public partial class FloatingBarViewModel : ObservableObject
     {
         FeedbackMessage = message;
         Phase = FloatingBarPhase.Done;
-        ScheduleAutoHide(FloatingBarPhase.Done, 1500);
+        ScheduleAutoHide(FloatingBarPhase.Done, 10000);
     }
 
     private void ScheduleAutoHide(FloatingBarPhase expectedPhase, int delayMs)

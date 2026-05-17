@@ -43,9 +43,9 @@ public static class InjectionOutcomeExtensions
 {
     public static string CompletionMessage(this InjectionOutcome outcome) => outcome switch
     {
-        InjectionOutcome.Inserted => Loc.L("已完成", "Done"),
-        InjectionOutcome.CopiedToClipboard => Loc.L("已复制到剪贴板", "Copied to clipboard"),
-        _ => Loc.L("已完成", "Done"),
+        InjectionOutcome.Inserted => Loc.L("优化完", "Optimized"),
+        InjectionOutcome.CopiedToClipboard => Loc.L("优化完", "Optimized"),
+        _ => Loc.L("优化完", "Optimized"),
     };
 }
 

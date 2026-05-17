@@ -29,32 +29,43 @@ public partial class FloatingBarView : UserControl
             case FloatingBarPhase.Preparing:
                 Visibility = Visibility.Visible;
                 StatusDot.Fill = new SolidColorBrush(DesignTokens.Amber);
-                ContentText.Text = Localization.Loc.L("准备中...", "Preparing...");
+                StatusText.Text = Localization.Loc.L("准备中...", "Preparing...");
+                SetContent(string.Empty);
                 break;
 
             case FloatingBarPhase.Recording:
                 Visibility = Visibility.Visible;
                 StatusDot.Fill = new SolidColorBrush(DesignTokens.Recording);
-                ContentText.Text = vm.TranscriptionText;
+                StatusText.Text = Localization.Loc.L("识别中...", "Listening...");
+                SetContent(vm.TranscriptionText);
                 break;
 
             case FloatingBarPhase.Processing:
                 Visibility = Visibility.Visible;
                 StatusDot.Fill = new SolidColorBrush(DesignTokens.Amber);
-                ContentText.Text = vm.ProcessingLabel;
+                StatusText.Text = vm.ProcessingLabel;
+                SetContent(vm.TranscriptionText);
                 break;
 
             case FloatingBarPhase.Done:
                 Visibility = Visibility.Visible;
                 StatusDot.Fill = new SolidColorBrush(DesignTokens.Success);
-                ContentText.Text = vm.FeedbackMessage;
+                StatusText.Text = vm.FeedbackMessage;
+                SetContent(vm.TranscriptionText);
                 break;
 
             case FloatingBarPhase.Error:
                 Visibility = Visibility.Visible;
                 StatusDot.Fill = new SolidColorBrush(Colors.Red);
-                ContentText.Text = vm.FeedbackMessage;
+                StatusText.Text = vm.FeedbackMessage;
+                SetContent(string.Empty);
                 break;
         }
+    }
+
+    private void SetContent(string text)
+    {
+        ContentText.Text = text;
+        ContentText.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
     }
 }

@@ -28,22 +28,30 @@ public sealed class OpenAIChatClient : ILLMClient
         catch { /* ignore */ }
     }
 
-    public async Task<string> ProcessAsync(string text, string prompt, LLMConfig config, CancellationToken ct = default)
+    public async Task<string> ProcessAsync(string text, string prompt, LLMConfig config, LLMRequestContext? context = null, CancellationToken ct = default)
     {
         var trimmedText = text.Trim();
         if (string.IsNullOrEmpty(trimmedText)) return text;
 
-        var finalPrompt = prompt.Replace("{text}", trimmedText);
+        var finalPrompt = PromptContextBuilder.Build(prompt, trimmedText, context);
         var url = $"{config.BaseURL.TrimEnd('/')}/chat/completions";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Add("Authorization", $"Bearer {config.ApiKey}");
         request.Headers.Add("Accept", "text/event-stream");
 
+        object messageContent = context?.HasScreenshot == true
+            ? new object[]
+            {
+                new { type = "text", text = finalPrompt },
+                new { type = "image_url", image_url = new { url = context.ScreenshotDataUrl } },
+            }
+            : finalPrompt;
+
         var body = new
         {
             model = config.Model,
-            messages = new[] { new { role = "user", content = finalPrompt } },
+            messages = new[] { new { role = "user", content = messageContent } },
             stream = true,
             thinking = new { type = "disabled" },
         };
